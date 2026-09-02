@@ -1,0 +1,373 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Inventory List</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&family=Dancing+Script:wght@600;700&display=swap');
+  :root{
+    --ink:#1F2A24; --ink-soft:#4A554E; --paper:#F6F7F3; --card:#FFFFFF;
+    --line:#D7DCD2; --line-strong:#B7C0AF; --green:#2E7D5B; --green-100:#E1F0E6;
+    --green-800:#1B4A36; --amber:#B9791A; --amber-100:#FBEFDA; --amber-800:#6B4408;
+    --red:#B23A2E; --red-100:#FBEAE7;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{background:var(--paper);color:var(--ink);font-family:'Inter',system-ui,-apple-system,sans-serif;padding:14px;}
+  .mono{font-family:'IBM Plex Mono',monospace;}
+  .wrap{max-width:900px;margin:0 auto;}
+  .apibar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;background:#fff7e6;border:1px solid #e8c778;border-radius:8px;padding:8px 12px;margin-bottom:12px;font-size:12.5px;color:#6B4408;}
+  .apibar.ok{background:var(--green-100);border-color:var(--green);color:var(--green-800);}
+  .apibar a{color:inherit;font-weight:700;text-decoration:underline;cursor:pointer;}
+  .masthead{text-align:center;padding:14px;background:var(--card);border:1.5px solid var(--ink);border-radius:6px;margin-bottom:14px;}
+  .masthead h1{margin:0;font-size:18px;letter-spacing:.03em;}
+  .tabs{display:flex;gap:6px;margin-bottom:14px;flex-wrap:wrap;}
+  .tab{flex:1;min-width:120px;text-align:center;padding:10px 8px;border:1px solid var(--line-strong);border-radius:8px;background:var(--card);font-weight:600;font-size:13px;color:var(--ink-soft);cursor:pointer;user-select:none;}
+  .tab.active{background:var(--ink);border-color:var(--ink);color:#fff;}
+  .panel{display:none;}
+  .panel.active{display:block;}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:16px;margin-bottom:14px;}
+  .field{display:flex;flex-direction:column;gap:4px;margin-bottom:12px;}
+  .field label{font-size:11px;font-weight:600;color:var(--ink-soft);text-transform:uppercase;letter-spacing:.03em;}
+  .field input{font-family:inherit;font-size:14px;padding:9px 10px;border:1px solid var(--line-strong);border-radius:6px;background:#fff;color:var(--ink);}
+  .field input.sig-input{font-family:'Dancing Script',cursive;font-size:20px;font-weight:600;color:var(--green-800);}
+  .field select{font-family:inherit;font-size:14px;padding:9px 10px;border:1px solid var(--line-strong);border-radius:6px;background:#fff;color:var(--ink);}
+  .row2{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+  .btn{font-family:inherit;font-weight:600;font-size:13.5px;padding:10px 16px;border-radius:7px;border:1px solid var(--line-strong);background:#fff;color:var(--ink);cursor:pointer;}
+  .btn:active{transform:scale(.98);}
+  .btn-primary{background:var(--green);border-color:var(--green);color:#fff;}
+  .btn-danger{color:var(--red);border-color:var(--red-100);}
+  .btn-block{width:100%;}
+  .status-pill{font-size:11.5px;font-weight:600;padding:5px 10px;border-radius:20px;background:var(--green-100);color:var(--green-800);display:inline-block;}
+  .status-pill.unsaved{background:var(--amber-100);color:var(--amber-800);}
+  .filter-row{display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;margin-bottom:14px;}
+  .filter-row .field{margin-bottom:0;}
+  .checkfield{display:flex;align-items:center;gap:6px;font-size:12.5px;font-weight:600;color:var(--ink-soft);}
+  table.log{width:100%;border-collapse:collapse;background:var(--card);border-radius:8px;overflow:hidden;font-size:13px;}
+  table.log th{background:var(--ink);color:#fff;padding:8px;text-align:left;font-size:11.5px;text-transform:uppercase;letter-spacing:.03em;}
+  table.log td{padding:8px;border-bottom:1px solid var(--line);}
+  table.log td.sig-cell{font-family:'Dancing Script',cursive;font-size:16px;color:var(--green-800);}
+  table.log tr:last-child td{border-bottom:none;}
+  .rowbtns{display:flex;gap:6px;}
+  .rowbtns button{padding:5px 9px;font-size:11.5px;}
+  .empty-note{color:var(--ink-soft);font-size:13px;padding:24px;text-align:center;}
+  .settings-row{display:flex;gap:8px;align-items:center;flex-wrap:wrap;}
+  .settings-row input{flex:1;min-width:220px;font-family:inherit;font-size:13px;padding:8px 10px;border:1px solid var(--line-strong);border-radius:6px;}
+  .hint{font-size:11.5px;color:var(--ink-soft);margin-top:8px;line-height:1.5;}
+  .hint code{background:var(--paper);padding:1px 5px;border-radius:4px;font-family:'IBM Plex Mono',monospace;font-size:11px;}
+
+  #printRoot{display:none;}
+  @page{ size: A4 portrait; margin: 10mm; }
+  @media print{
+    body *{visibility:hidden;}
+    #printRoot, #printRoot *{visibility:visible;}
+    #printRoot{display:block;position:absolute;left:0;top:0;width:100%;}
+  }
+  .ptitle{text-align:center;font-weight:700;font-size:16px;margin-bottom:14px;}
+  .ptable{width:100%;border-collapse:collapse;font-size:11px;}
+  .ptable th,.ptable td{border:1px solid #000;padding:5px 6px;text-align:left;}
+  .ptable th{text-align:center;font-weight:700;}
+  .ptable td.psig{font-family:'Dancing Script',cursive;font-size:14px;}
+</style>
+</head>
+<body>
+
+<div class="wrap" id="app">
+
+  <div class="apibar" id="apiBar">
+    Google Sheet not connected yet — data will only stay on this device/session.
+    <a id="apiBarLink">Go to setup</a>
+  </div>
+
+  <div class="masthead"><h1>INVENTORY LIST</h1></div>
+
+  <div class="tabs">
+    <div class="tab active" data-panel="add">Add Entry</div>
+    <div class="tab" data-panel="log">Log / Print</div>
+    <div class="tab" data-panel="settings">Google Sheet</div>
+  </div>
+
+  <div class="panel active" id="panel-add">
+    <div class="card">
+      <div class="field">
+        <label>Item</label>
+        <select id="fItemSelect"></select>
+        <input type="text" id="fItem" placeholder="Type item name" style="display:none;margin-top:8px;">
+      </div>
+      <div class="row2">
+        <div class="field"><label>Unit</label><input type="text" id="fUnit" placeholder="e.g. pcs, kg, box"></div>
+        <div class="field"><label>Date</label><input type="date" id="fDate"></div>
+      </div>
+      <div class="row2">
+        <div class="field"><label>Name</label><input type="text" id="fName" placeholder="Full name"></div>
+        <div class="field"><label>Signature (type name — auto initials)</label><input type="text" id="fSig" class="sig-input" placeholder="Type name"></div>
+      </div>
+      <div style="display:flex;align-items:center;gap:12px;margin-top:6px;">
+        <button class="btn btn-primary" id="addBtn">Add to Inventory List</button>
+        <span class="status-pill" id="statusPill">Ready</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="panel" id="panel-log">
+    <div class="filter-row">
+      <div class="field"><label>Filter by month (optional)</label><input type="month" id="monthFilter"></div>
+      <button class="btn" id="loadLogBtn">Show entries</button>
+      <button class="btn btn-primary" id="printLogBtn">Print list</button>
+    </div>
+    <div id="logTableWrap"><div class="empty-note">Tap "Show entries" to load the list.</div></div>
+  </div>
+
+  <div class="panel" id="panel-settings">
+    <div class="card">
+      <div style="font-weight:700;margin-bottom:10px;">Google Sheet connection</div>
+      <div class="settings-row">
+        <input type="text" id="sheetUrlInput" placeholder="Paste your Google Apps Script Web App URL here">
+        <button class="btn btn-primary" id="saveUrlBtn">Save URL</button>
+      </div>
+      <div class="hint">
+        Every entry you add is written straight to your Google Sheet (tab "Inventory Log"), so anyone using this same link sees the same list, and it survives closing the tab.<br><br>
+        <b>One-time setup:</b><br>
+        1. Open a blank Google Sheet → <b>Extensions → Apps Script</b><br>
+        2. Copy all the code from the included file <code>google_apps_script.gs</code>, paste it in, then <b>Deploy → New deployment → Web app</b>, "Who has access" = Anyone<br>
+        3. Copy the deployment URL, paste it above, tap Save URL.<br><br>
+        To host this page online (so it works from any device, not just this one), drag this HTML file onto a static host such as GitHub Pages — ask if you'd like the exact steps.
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<div id="printRoot"></div>
+
+<script>
+function safeGet(k){ try{ return localStorage.getItem(k) || ''; }catch(e){ return ''; } }
+function safeSet(k,v){ try{ localStorage.setItem(k,v); }catch(e){} }
+
+let apiUrl = safeGet('inventory_api_url') || '';
+const el = id => document.getElementById(id);
+const memStore = [];
+
+const DEFAULT_ITEMS = [
+  "Hairnet","Face Mask","Tissue","Napkin Tissue","Glove","Shoes Cover"
+]; // fallback list — overwritten by the "Item List" tab in Google Sheet once loaded
+
+function populateItemSelect(items){
+  const sel = el('fItemSelect');
+  sel.innerHTML = items.map(name=>`<option value="${name.replace(/"/g,'&quot;')}">${name}</option>`).join('')
+    + '<option value="__other__">Other (type manually)…</option>';
+  sel.value = items[0] || '__other__';
+  toggleItemInput();
+}
+function toggleItemInput(){
+  const sel = el('fItemSelect');
+  const manual = el('fItem');
+  if(sel.value === '__other__'){ manual.style.display = 'block'; manual.focus(); }
+  else { manual.style.display = 'none'; manual.value = ''; }
+}
+function currentItemValue(){
+  const sel = el('fItemSelect');
+  if(sel.value === '__other__') return el('fItem').value.trim();
+  return sel.value;
+}
+async function apiGetItemList(){
+  if(!apiUrl) return null;
+  try{
+    const res = await fetch(apiUrl + '?action=itemlist');
+    const text = await res.text();
+    let j; try{ j = JSON.parse(text); }catch(e){ console.error('[inventory] GET itemlist: non-JSON response:', text); return null; }
+    if(j && j.ok && Array.isArray(j.items)) return j.items;
+    if(j && j.ok===false) console.error('[inventory] GET itemlist: script error:', j.error);
+  }catch(e){ console.error('[inventory] GET itemlist: fetch failed:', e); }
+  return null;
+}
+
+function todayStr(){ return new Date().toISOString().slice(0,10); }
+function toInitials(v){
+  const parts = (v||'').trim().split(/\s+/).filter(Boolean);
+  if(parts.length===0) return '';
+  if(parts.length===1) return parts[0];
+  return parts.map(w=>w[0].toUpperCase()).join('');
+}
+function escapeHtml(s){ return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;'); }
+
+function refreshApiBar(){
+  const bar = el('apiBar');
+  if(apiUrl){
+    bar.classList.add('ok');
+    bar.innerHTML = 'Connected to Google Sheet. Entries are saved online and shared with anyone using this same connection.';
+  } else {
+    bar.classList.remove('ok');
+    bar.innerHTML = 'Google Sheet not connected yet — data will only stay on this device/session. <a id="apiBarLink">Go to setup</a>';
+    const link = el('apiBarLink');
+    if(link) link.addEventListener('click', ()=> document.querySelector('[data-panel="settings"]').click());
+  }
+}
+
+function setStatus(text, kind){
+  const p = el('statusPill');
+  p.textContent = text;
+  p.className = 'status-pill' + (kind==='unsaved' ? ' unsaved' : '');
+}
+
+// ---------------- Data layer ----------------
+async function apiAddEntry(entry){
+  memStore.push(entry);
+  if(!apiUrl) return {ok:false, reason:'no-url'};
+  try{
+    const res = await fetch(apiUrl, {method:'POST', headers:{'Content-Type':'text/plain'},
+      body: JSON.stringify({action:'add', entry})});
+    const text = await res.text();
+    let j; try{ j = JSON.parse(text); }catch(e){
+      console.error('[inventory] ADD: non-JSON response:', text);
+      return {ok:false, reason:'bad-response', raw:text};
+    }
+    if(j.ok===false){ console.error('[inventory] ADD: script error:', j.error); return {ok:false, reason:'script-error', raw:j.error}; }
+    return {ok:true};
+  }catch(e){ console.error('[inventory] ADD: fetch failed:', e); return {ok:false, reason:'fetch-error', raw:String(e)}; }
+}
+async function apiListEntries(month){
+  if(apiUrl){
+    try{
+      const url = apiUrl + (month ? ('?action=month&month=' + encodeURIComponent(month)) : '?action=list');
+      const res = await fetch(url);
+      const text = await res.text();
+      let j; try{ j = JSON.parse(text); }catch(e){ console.error('[inventory] LIST: non-JSON response:', text); j = null; }
+      if(j && j.ok) return j.rows || [];
+      if(j && j.ok===false) console.error('[inventory] LIST: script error:', j.error);
+    }catch(e){ console.error('[inventory] LIST: fetch failed:', e); }
+  }
+  return month ? memStore.filter(r=> (r.date||'').startsWith(month)) : memStore.slice();
+}
+async function apiDeleteEntry(rowNum){
+  if(!apiUrl) return {ok:false, reason:'no-url'};
+  try{
+    const res = await fetch(apiUrl, {method:'POST', headers:{'Content-Type':'text/plain'},
+      body: JSON.stringify({action:'delete', row: rowNum})});
+    const text = await res.text();
+    let j; try{ j = JSON.parse(text); }catch(e){ return {ok:false, reason:'bad-response', raw:text}; }
+    if(j.ok===false) return {ok:false, reason:'script-error', raw:j.error};
+    return {ok:true};
+  }catch(e){ return {ok:false, reason:'fetch-error', raw:String(e)}; }
+}
+
+// ---------------- Add Entry ----------------
+el('fDate').value = todayStr();
+populateItemSelect(DEFAULT_ITEMS);
+el('fItemSelect').addEventListener('change', toggleItemInput);
+el('fSig').addEventListener('input', e=>{
+  const initials = toInitials(e.target.value);
+  if(e.target.value !== initials) e.target.value = initials;
+});
+
+el('addBtn').addEventListener('click', async ()=>{
+  const entry = {
+    item: currentItemValue(),
+    unit: el('fUnit').value.trim(),
+    date: el('fDate').value || todayStr(),
+    name: el('fName').value.trim(),
+    signature: el('fSig').value.trim()
+  };
+  if(!entry.item){ alert('Please choose or type an item name.'); return; }
+  setStatus('Saving...', 'unsaved');
+  const res = await apiAddEntry(entry);
+  if(res.ok){
+    setStatus('Added ✓');
+    el('fUnit').value=''; el('fName').value=''; el('fSig').value='';
+    el('fItem').value='';
+    el('fItemSelect').value = el('fItemSelect').options[0] ? el('fItemSelect').options[0].value : '__other__';
+    toggleItemInput();
+    el('fDate').value = todayStr();
+  } else if(res.reason==='no-url'){
+    setStatus('Saved on this device only', 'unsaved');
+  } else {
+    setStatus('Save failed — see Console (F12)', 'unsaved');
+    console.error('[inventory] Add failed, reason:', res.reason, res.raw||'');
+  }
+});
+
+// ---------------- Log / Print ----------------
+async function loadLog(){
+  const month = el('monthFilter').value;
+  const wrap = el('logTableWrap');
+  wrap.innerHTML = '<div class="empty-note">Loading...</div>';
+  const rows = await apiListEntries(month);
+  if(rows.length===0){ wrap.innerHTML = '<div class="empty-note">No entries found.</div>'; return; }
+  let html = '<table class="log"><thead><tr><th>Item</th><th>Unit</th><th>Date</th><th>Name</th><th>Signature</th><th></th></tr></thead><tbody>';
+  rows.forEach(r=>{
+    html += `<tr>
+      <td>${escapeHtml(r.item)}</td>
+      <td>${escapeHtml(r.unit)}</td>
+      <td class="mono">${escapeHtml(r.date)}</td>
+      <td>${escapeHtml(r.name)}</td>
+      <td class="sig-cell">${escapeHtml(r.signature)}</td>
+      <td><span class="rowbtns"><button class="btn btn-danger" data-row="${r.row}">Delete</button></span></td>
+    </tr>`;
+  });
+  html += '</tbody></table>';
+  wrap.innerHTML = html;
+  wrap.querySelectorAll('[data-row]').forEach(btn=>{
+    btn.addEventListener('click', async ()=>{
+      if(!confirm('Delete this entry? This cannot be undone.')) return;
+      const res = await apiDeleteEntry(+btn.dataset.row);
+      if(res.ok) loadLog();
+      else alert('Could not delete — check Console (F12) or the Google Sheet connection.');
+    });
+  });
+}
+el('loadLogBtn').addEventListener('click', loadLog);
+
+function doPrint(rows){
+  if(rows.length===0){ alert('No entries to print.'); return; }
+  const rowsHtml = rows.map(r=>`<tr>
+    <td>${escapeHtml(r.item)}</td>
+    <td>${escapeHtml(r.unit)}</td>
+    <td>${escapeHtml(r.date)}</td>
+    <td>${escapeHtml(r.name)}</td>
+    <td class="psig">${escapeHtml(r.signature)}</td>
+  </tr>`).join('');
+  el('printRoot').innerHTML = `
+    <div class="ptitle">INVENTORY LIST</div>
+    <table class="ptable">
+      <thead><tr><th>Items</th><th>Unit</th><th>Date</th><th>Name</th><th>Signature</th></tr></thead>
+      <tbody>${rowsHtml}</tbody>
+    </table>`;
+  window.print();
+}
+el('printLogBtn').addEventListener('click', async ()=>{
+  const month = el('monthFilter').value;
+  const rows = await apiListEntries(month);
+  doPrint(rows);
+});
+
+// ---------------- Google Sheet connection ----------------
+el('sheetUrlInput').value = apiUrl;
+refreshApiBar();
+el('saveUrlBtn').addEventListener('click', ()=>{
+  apiUrl = el('sheetUrlInput').value.trim();
+  safeSet('inventory_api_url', apiUrl);
+  refreshApiBar();
+  alert(apiUrl ? 'Connected. Entries will now save to your Google Sheet.' : 'URL cleared.');
+});
+
+// ---------------- Tabs ----------------
+document.querySelectorAll('.tab').forEach(tab=>{
+  tab.addEventListener('click', ()=>{
+    document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+    document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));
+    tab.classList.add('active');
+    el('panel-'+tab.dataset.panel).classList.add('active');
+  });
+});
+
+// ---------------- Init ----------------
+(async function initApp(){
+  const remoteItems = await apiGetItemList();
+  if(remoteItems && remoteItems.length) populateItemSelect(remoteItems);
+})();
+
+</script>
+
+</body>
+</html>
