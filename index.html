@@ -123,15 +123,15 @@
     <div class="card">
       <div style="font-weight:700;margin-bottom:10px;">Google Sheet connection</div>
       <div class="settings-row">
-        <input type="text" id="sheetUrlInput" placeholder="Paste your Google Apps Script Web App URL here">
+        <input type="text" id="sheetUrlInput" value="https://script.google.com/macros/s/AKfycbxhSfXF5pXDRopdcZ8ifi1hGS2-Wk02DXYlnfK7TSSTOY4s2T7OjKVqCrrkBaTvA6fBWQ/exec" readonly>
         <button class="btn btn-primary" id="saveUrlBtn">Save URL</button>
       </div>
       <div class="hint">
         Every entry you add is written straight to your Google Sheet (tab "Inventory Log"), so anyone using this same link sees the same list, and it survives closing the tab.<br><br>
-        <b>One-time setup:</b><br>
+        <b>Connection:</b><br>
         1. Open a blank Google Sheet → <b>Extensions → Apps Script</b><br>
         2. Copy all the code from the included file <code>google_apps_script.gs</code>, paste it in, then <b>Deploy → New deployment → Web app</b>, "Who has access" = Anyone<br>
-        3. Copy the deployment URL, paste it above, tap Save URL.<br><br>
+        3. The connection URL is already built into this page, so no setup is needed when opening the hosted link.<br><br>
         To host this page online (so it works from any device, not just this one), drag this HTML file onto a static host such as GitHub Pages — ask if you'd like the exact steps.
       </div>
     </div>
@@ -145,7 +145,8 @@
 function safeGet(k){ try{ return localStorage.getItem(k) || ''; }catch(e){ return ''; } }
 function safeSet(k,v){ try{ localStorage.setItem(k,v); }catch(e){} }
 
-let apiUrl = safeGet('inventory_api_url') || '';
+const DEFAULT_API_URL = 'https://script.google.com/macros/s/AKfycbxhSfXF5pXDRopdcZ8ifi1hGS2-Wk02DXYlnfK7TSSTOY4s2T7OjKVqCrrkBaTvA6fBWQ/exec';
+let apiUrl = DEFAULT_API_URL;
 const el = id => document.getElementById(id);
 const memStore = [];
 
@@ -342,13 +343,14 @@ el('printLogBtn').addEventListener('click', async ()=>{
 });
 
 // ---------------- Google Sheet connection ----------------
-el('sheetUrlInput').value = apiUrl;
+el('sheetUrlInput').value = DEFAULT_API_URL;
 refreshApiBar();
 el('saveUrlBtn').addEventListener('click', ()=>{
-  apiUrl = el('sheetUrlInput').value.trim();
-  safeSet('inventory_api_url', apiUrl);
+  apiUrl = DEFAULT_API_URL;
+  el('sheetUrlInput').value = DEFAULT_API_URL;
+  safeSet('inventory_api_url', DEFAULT_API_URL);
   refreshApiBar();
-  alert(apiUrl ? 'Connected. Entries will now save to your Google Sheet.' : 'URL cleared.');
+  alert('Connected. Entries will now save to your Google Sheet.');
 });
 
 // ---------------- Tabs ----------------
