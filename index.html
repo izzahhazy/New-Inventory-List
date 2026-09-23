@@ -96,7 +96,7 @@
         <input type="text" id="fItem" placeholder="Type item name" style="display:none;margin-top:8px;">
       </div>
       <div class="row2">
-        <div class="field"><label>Unit</label><input type="text" id="fUnit" placeholder="e.g. pcs, kg, box"></div>
+        <div class="field"><label>Quantity Taken (pcs)</label><input type="number" id="fUnit" min="1" step="1" placeholder="e.g. 50"></div>
         <div class="field"><label>Date</label><input type="date" id="fDate"></div>
       </div>
       <div class="row2">
@@ -271,6 +271,7 @@ el('addBtn').addEventListener('click', async ()=>{
     signature: el('fSig').value.trim()
   };
   if(!entry.item){ alert('Please choose or type an item name.'); return; }
+  if(!entry.unit){ alert('Please enter the quantity taken.'); return; }
   setStatus('Saving...', 'unsaved');
   const res = await apiAddEntry(entry);
   if(res.ok){
@@ -295,7 +296,7 @@ async function loadLog(){
   wrap.innerHTML = '<div class="empty-note">Loading...</div>';
   const rows = await apiListEntries(month);
   if(rows.length===0){ wrap.innerHTML = '<div class="empty-note">No entries found.</div>'; return; }
-  let html = '<table class="log"><thead><tr><th>Item</th><th>Unit</th><th>Date</th><th>Name</th><th>Signature</th><th></th></tr></thead><tbody>';
+  let html = '<table class="log"><thead><tr><th>Item</th><th>Qty (pcs)</th><th>Date</th><th>Name</th><th>Signature</th><th></th></tr></thead><tbody>';
   rows.forEach(r=>{
     html += `<tr>
       <td>${escapeHtml(r.item)}</td>
@@ -331,7 +332,7 @@ function doPrint(rows){
   el('printRoot').innerHTML = `
     <div class="ptitle">INVENTORY LIST</div>
     <table class="ptable">
-      <thead><tr><th>Items</th><th>Unit</th><th>Date</th><th>Name</th><th>Signature</th></tr></thead>
+      <thead><tr><th>Items</th><th>Qty (pcs)</th><th>Date</th><th>Name</th><th>Signature</th></tr></thead>
       <tbody>${rowsHtml}</tbody>
     </table>`;
   window.print();
