@@ -57,7 +57,15 @@
   .hint{font-size:11.5px;color:var(--ink-soft);margin-top:8px;line-height:1.5;}
   .hint code{background:var(--paper);padding:1px 5px;border-radius:4px;font-family:'IBM Plex Mono',monospace;font-size:11px;}
 
-  #printRoot{display:none;}
+.stk-table{width:100%;border-collapse:collapse;background:var(--card);border-radius:8px;overflow:hidden;font-size:13px;}
+.stk-table th{background:var(--ink);color:#fff;padding:8px;text-align:left;font-size:11.5px;text-transform:uppercase;letter-spacing:.03em;}
+.stk-table td{padding:6px 8px;border-bottom:1px solid var(--line);}
+.stk-table input{width:100%;font-family:inherit;font-size:14px;padding:7px 8px;border:1px solid var(--line-strong);border-radius:6px;}
+.stk-table tr.low td{background:var(--red-100);}
+.stk-table tr.out td{background:var(--red);color:#fff;font-weight:700;}
+.stk-table tr.out input{border-color:#fff;}
+.apibar.warn{background:var(--red-100);border-color:var(--red);color:var(--red);font-weight:600;}
+#printRoot{display:none;}
   @page{ size: A4 portrait; margin: 10mm; }
   @media print{
     body *{visibility:hidden;}
@@ -84,6 +92,7 @@
 
   <div class="tabs">
     <div class="tab active" data-panel="add">Add Entry</div>
+    <div class="tab" data-panel="stock">Stock</div>
     <div class="tab" data-panel="log">Log / Print</div>
     <div class="tab" data-panel="settings">Google Sheet</div>
   </div>
@@ -94,6 +103,7 @@
         <label>Item</label>
         <select id="fItemSelect"></select>
         <input type="text" id="fItem" placeholder="Type item name" style="display:none;margin-top:8px;">
+        <div class="hint" id="stockHint"></div>
       </div>
       <div class="row2">
         <div class="field"><label>Quantity Taken (pcs)</label><input type="number" id="fUnit" min="1" step="1" placeholder="e.g. 50"></div>
@@ -117,6 +127,23 @@
       <button class="btn btn-primary" id="printLogBtn">Print list</button>
     </div>
     <div id="logTableWrap"><div class="empty-note">Tap "Show entries" to load the list.</div></div>
+  </div>
+
+  <div class="panel" id="panel-stock">
+    <div class="apibar ok" id="stockSummary">Loading stock...</div>
+    <div class="card">
+      <div class="row2">
+        <div class="field"><label>Stock take date</label><input type="date" id="stDate"></div>
+        <div class="field"><label>PIC name</label><input type="text" id="stName" placeholder="Full name"></div>
+      </div>
+      <div class="hint" style="margin:0 0 10px;">Key in the actual count (pcs) for each item. Leave a row blank to keep its current stock. Rows turn red when stock is at or below the reorder level.</div>
+      <div style="overflow-x:auto;"><table class="stk-table"><thead><tr><th>Item</th><th>Stock (pcs)</th><th>Reorder level (pcs)</th></tr></thead><tbody id="stBody"></tbody></table></div>
+      <div style="display:flex;align-items:center;gap:12px;margin-top:12px;flex-wrap:wrap;">
+        <button class="btn btn-primary" id="stSaveBtn">Save stock take</button>
+        <button class="btn" id="stRefreshBtn">Refresh</button>
+        <span class="status-pill" id="stStatus">Ready</span>
+      </div>
+    </div>
   </div>
 
   <div class="panel" id="panel-settings">
@@ -149,6 +176,7 @@ const DEFAULT_API_URL = 'https://script.google.com/macros/s/AKfycbxhSfXF5pXDRopd
 let apiUrl = DEFAULT_API_URL;
 const el = id => document.getElementById(id);
 const memStore = [];
+let stockData = [];
 
 const DEFAULT_ITEMS = [
   "Hairnet","Face Mask","Tissue","Napkin Tissue","Glove","Shoes Cover"
@@ -166,6 +194,7 @@ function toggleItemInput(){
   const manual = el('fItem');
   if(sel.value === '__other__'){ manual.style.display = 'block'; manual.focus(); }
   else { manual.style.display = 'none'; manual.value = ''; }
+  updateStockHint();
 }
 function currentItemValue(){
   const sel = el('fItemSelect');
@@ -272,10 +301,12 @@ el('addBtn').addEventListener('click', async ()=>{
   };
   if(!entry.item){ alert('Please choose or type an item name.'); return; }
   if(!entry.unit){ alert('Please enter the quantity taken.'); return; }
+  const stNow = stockFor(entry.item);
+  if(stNow!==null && +entry.unit > stNow && !confirm('Quantity taken ('+entry.unit+') is more than current stock ('+stNow+'). Save anyway?')) return;
   setStatus('Saving...', 'unsaved');
   const res = await apiAddEntry(entry);
   if(res.ok){
-    setStatus('Added ✓');
+    setStatus('Added ✓'); loadStock();
     el('fUnit').value=''; el('fName').value=''; el('fSig').value='';
     el('fItem').value='';
     el('fItemSelect').value = el('fItemSelect').options[0] ? el('fItemSelect').options[0].value : '__other__';
@@ -364,10 +395,101 @@ document.querySelectorAll('.tab').forEach(tab=>{
   });
 });
 
+// ---------------- Stock ----------------
+function stockFor(name){
+  const k = (name||'').trim().toLowerCase();
+  const r = stockData.find(s=> String(s.item).trim().toLowerCase()===k);
+  return r ? (Number(r.stock)||0) : null;
+}
+function stockState(stock, reorder){
+  if(stock===''||stock===null||isNaN(stock)) return '';
+  stock = +stock;
+  if(stock<=0) return 'out';
+  if(reorder!==''&&reorder!==null&&!isNaN(reorder)&&stock<=+reorder) return 'low';
+  return '';
+}
+function updateStockHint(){
+  const h = el('stockHint'); if(!h) return;
+  const name = currentItemValue();
+  const r = stockData.find(s=> String(s.item).trim().toLowerCase()===name.trim().toLowerCase());
+  if(!r){ h.textContent = ''; return; }
+  const st = stockState(r.stock, r.reorder);
+  h.style.color = st ? 'var(--red)' : '';
+  h.style.fontWeight = st ? '700' : '';
+  h.textContent = 'Current stock: ' + r.stock + ' pcs' + (st==='out' ? ' (out of stock)' : st==='low' ? ' (low — reorder)' : '');
+}
+async function apiGetStock(){
+  if(!apiUrl) return null;
+  try{
+    const res = await fetch(apiUrl + '?action=stock');
+    const text = await res.text();
+    let j; try{ j = JSON.parse(text); }catch(e){ console.error('[inventory] GET stock: non-JSON:', text); return null; }
+    if(j && j.ok && Array.isArray(j.items)) return j.items;
+    if(j && j.ok===false) console.error('[inventory] GET stock: script error:', j.error);
+  }catch(e){ console.error('[inventory] GET stock: fetch failed:', e); }
+  return null;
+}
+function refreshStockRowStates(){
+  let low = 0, out = 0;
+  document.querySelectorAll('#stBody tr').forEach(tr=>{
+    const stock = tr.querySelector('.stk').value, reorder = tr.querySelector('.rol').value;
+    const st = stockState(stock, reorder);
+    tr.className = st;
+    if(st==='low') low++; if(st==='out') out++;
+  });
+  const bar = el('stockSummary');
+  if(low+out>0){ bar.className='apibar warn'; bar.textContent = (low+out)+' item(s) need reorder: '+low+' low, '+out+' out of stock.'; }
+  else { bar.className='apibar ok'; bar.textContent = 'All items are above reorder level.'; }
+}
+function renderStock(){
+  const body = el('stBody');
+  if(stockData.length===0){ body.innerHTML = '<tr><td colspan="3" class="empty-note">No stock data found. Check the "Stock PPE" tab in the Google Sheet.</td></tr>'; return; }
+  body.innerHTML = stockData.map((r,i)=>`<tr data-i="${i}">
+<td>${escapeHtml(String(r.item))}</td>
+<td><input type="number" min="0" step="1" class="stk" value="${r.stock===''?'':r.stock}"></td>
+<td><input type="number" min="0" step="1" class="rol" value="${r.reorder===''?'':r.reorder}"></td>
+</tr>`).join('');
+  body.querySelectorAll('input').forEach(inp=> inp.addEventListener('input', refreshStockRowStates));
+  refreshStockRowStates();
+}
+async function loadStock(){
+  const items = await apiGetStock();
+  if(items){ stockData = items; renderStock(); updateStockHint(); }
+  else { el('stockSummary').className='apibar warn'; el('stockSummary').textContent='Could not load stock. Check the Google Sheet connection.'; }
+}
+el('stDate').value = todayStr();
+el('stRefreshBtn').addEventListener('click', loadStock);
+document.querySelector('[data-panel="stock"]').addEventListener('click', loadStock);
+el('stSaveBtn').addEventListener('click', async ()=>{
+  const name = el('stName').value.trim();
+  if(!name){ alert('Please enter PIC name.'); return; }
+  const items = [];
+  let bad = false;
+  document.querySelectorAll('#stBody tr').forEach(tr=>{
+    const r = stockData[+tr.dataset.i];
+    const stock = tr.querySelector('.stk').value.trim(), reorder = tr.querySelector('.rol').value.trim();
+    if(stock!=='' && (isNaN(stock) || +stock<0)) bad = true;
+    if(reorder!=='' && (isNaN(reorder) || +reorder<0)) bad = true;
+    items.push({item:r.item, stock, reorder});
+  });
+  if(bad){ alert('Stock and reorder level must be numbers (0 or more).'); return; }
+  if(!confirm('Save this stock take? Current stock in the Google Sheet will be replaced with these counts.')) return;
+  const pill = el('stStatus');
+  pill.textContent = 'Saving...'; pill.className = 'status-pill unsaved';
+  try{
+    const res = await fetch(apiUrl, {method:'POST', headers:{'Content-Type':'text/plain'},
+      body: JSON.stringify({action:'stocktake', date: el('stDate').value || todayStr(), name, items})});
+    const j = JSON.parse(await res.text());
+    if(j.ok){ pill.textContent = 'Saved ✓'; pill.className = 'status-pill'; await loadStock(); }
+    else { pill.textContent = 'Save failed — see Console (F12)'; console.error('[inventory] stocktake error:', j.error); }
+  }catch(e){ pill.textContent = 'Save failed — see Console (F12)'; console.error('[inventory] stocktake failed:', e); }
+});
+
 // ---------------- Init ----------------
 (async function initApp(){
   const remoteItems = await apiGetItemList();
   if(remoteItems && remoteItems.length) populateItemSelect(remoteItems);
+  loadStock();
 })();
 
 </script>
