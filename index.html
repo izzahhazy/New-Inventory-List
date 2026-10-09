@@ -106,7 +106,10 @@
         <div class="hint" id="stockHint"></div>
       </div>
       <div class="row2">
-        <div class="field"><label>Quantity Taken (pcs)</label><input type="number" id="fUnit" min="1" step="1" placeholder="e.g. 50"></div>
+        <div class="field"><label id="qtyLabel">Quantity Taken (pcs)</label>
+          <div id="unitToggle" style="display:none;gap:6px;margin-bottom:6px;"><button type="button" class="btn" id="utPack" style="flex:1;"></button><button type="button" class="btn" id="utPcs" style="flex:1;">pcs</button></div>
+          <input type="number" id="fUnit" min="1" step="1" placeholder="e.g. 50">
+          <div class="hint" id="packHint"></div></div>
         <div class="field"><label>Date</label><input type="date" id="fDate"></div>
       </div>
       <div class="row2">
@@ -137,7 +140,7 @@
         <div class="field"><label>PIC name</label><input type="text" id="stName" placeholder="Full name"></div>
       </div>
       <div class="hint" style="margin:0 0 10px;">Key in the actual count (pcs) for each item. Leave a row blank to keep its current stock. Rows turn red when stock is at or below the reorder level.</div>
-      <div style="overflow-x:auto;"><table class="stk-table"><thead><tr><th>Item</th><th>Stock (pcs)</th><th>Reorder level (pcs)</th></tr></thead><tbody id="stBody"></tbody></table></div>
+      <div style="overflow-x:auto;"><table class="stk-table"><thead><tr><th>Item</th><th>Stock (pcs)</th><th>Reorder level (pcs)</th><th>Pack</th></tr></thead><tbody id="stBody"></tbody></table></div>
       <div style="display:flex;align-items:center;gap:12px;margin-top:12px;flex-wrap:wrap;">
         <button class="btn btn-primary" id="stSaveBtn">Save stock take</button>
         <button class="btn" id="stRefreshBtn">Refresh</button>
@@ -177,6 +180,7 @@ let apiUrl = DEFAULT_API_URL;
 const el = id => document.getElementById(id);
 const memStore = [];
 let stockData = [];
+let packMode = 'pcs', packItemKey = '';
 
 const DEFAULT_ITEMS = [
   "Hairnet","Face Mask","Tissue","Napkin Tissue","Glove","Shoes Cover"
@@ -286,6 +290,9 @@ async function apiDeleteEntry(rowNum){
 el('fDate').value = todayStr();
 populateItemSelect(DEFAULT_ITEMS);
 el('fItemSelect').addEventListener('change', toggleItemInput);
+el('fUnit').addEventListener('input', renderPackUI);
+el('utPack').addEventListener('click', ()=>{ packMode='pack'; el('fUnit').value=''; renderPackUI(); });
+el('utPcs').addEventListener('click', ()=>{ packMode='pcs'; el('fUnit').value=''; renderPackUI(); });
 el('fSig').addEventListener('input', e=>{
   const initials = toInitials(e.target.value);
   if(e.target.value !== initials) e.target.value = initials;
@@ -294,20 +301,22 @@ el('fSig').addEventListener('input', e=>{
 el('addBtn').addEventListener('click', async ()=>{
   const entry = {
     item: currentItemValue(),
-    unit: el('fUnit').value.trim(),
+    unit: entryPcs() ? String(entryPcs()) : '',
     date: el('fDate').value || todayStr(),
     name: el('fName').value.trim(),
     signature: el('fSig').value.trim()
   };
   if(!entry.item){ alert('Please choose or type an item name.'); return; }
   if(!entry.unit){ alert('Please enter the quantity taken.'); return; }
+  const pkc = packInfo(entry.item);
+  if(pkc && packMode==='pack' && !confirm('You are taking '+el('fUnit').value+' '+pkc.label+' = '+entry.unit+' pcs. Correct?')) return;
   const stNow = stockFor(entry.item);
   if(stNow!==null && +entry.unit > stNow && !confirm('Quantity taken ('+entry.unit+') is more than current stock ('+stNow+'). Save anyway?')) return;
   setStatus('Saving...', 'unsaved');
   const res = await apiAddEntry(entry);
   if(res.ok){
     setStatus('Added ✓'); loadStock();
-    el('fUnit').value=''; el('fName').value=''; el('fSig').value='';
+    el('fUnit').value=''; packItemKey=''; el('fName').value=''; el('fSig').value='';
     el('fItem').value='';
     el('fItemSelect').value = el('fItemSelect').options[0] ? el('fItemSelect').options[0].value : '__other__';
     toggleItemInput();
@@ -408,7 +417,44 @@ function stockState(stock, reorder){
   if(reorder!==''&&reorder!==null&&!isNaN(reorder)&&stock<=+reorder) return 'low';
   return '';
 }
+function packInfo(name){
+  const k=(name||'').trim().toLowerCase();
+  const r=stockData.find(s=> String(s.item).trim().toLowerCase()===k);
+  const n=r?Number(r.pack):0;
+  return n>0 ? {pcs:n, label:(r.packLabel||'bdl')} : null;
+}
+function entryPcs(){
+  const n=+el('fUnit').value; const p=packInfo(currentItemValue());
+  if(!(n>0)) return 0;
+  return (p && packMode==='pack') ? n*p.pcs : n;
+}
+function renderPackUI(){
+  const p=packInfo(currentItemValue());
+  const tg=el('unitToggle'), hint=el('packHint'), lab=el('qtyLabel'), inp=el('fUnit');
+  if(!tg) return;
+  if(!p){ tg.style.display='none'; hint.textContent=''; lab.textContent='Quantity Taken (pcs)'; inp.placeholder='e.g. 50'; return; }
+  tg.style.display='flex';
+  el('utPack').textContent=p.label;
+  el('utPack').className='btn'+(packMode==='pack'?' btn-primary':'');
+  el('utPcs').className='btn'+(packMode==='pcs'?' btn-primary':'');
+  const n=+inp.value;
+  if(packMode==='pack'){
+    lab.textContent='Number of '+p.label+' taken'; inp.placeholder='e.g. 1';
+    hint.textContent = n>0 ? n+' '+p.label+' = '+(n*p.pcs)+' pcs (1 '+p.label+' = '+p.pcs+' pcs)' : '1 '+p.label+' = '+p.pcs+' pcs';
+  } else {
+    lab.textContent='Quantity Taken (pcs)'; inp.placeholder='e.g. 50';
+    hint.textContent='1 '+p.label+' = '+p.pcs+' pcs';
+  }
+}
+function updatePackBox(){
+  const p=packInfo(currentItemValue());
+  const key=currentItemValue().trim().toLowerCase();
+  if(!p){ packItemKey=''; packMode='pcs'; }
+  else if(key!==packItemKey){ packItemKey=key; packMode='pack'; el('fUnit').value=''; }
+  renderPackUI();
+}
 function updateStockHint(){
+  updatePackBox();
   const h = el('stockHint'); if(!h) return;
   const name = currentItemValue();
   const r = stockData.find(s=> String(s.item).trim().toLowerCase()===name.trim().toLowerCase());
@@ -443,11 +489,12 @@ function refreshStockRowStates(){
 }
 function renderStock(){
   const body = el('stBody');
-  if(stockData.length===0){ body.innerHTML = '<tr><td colspan="3" class="empty-note">No stock data found. Check the "Stock PPE" tab in the Google Sheet.</td></tr>'; return; }
+  if(stockData.length===0){ body.innerHTML = '<tr><td colspan="4" class="empty-note">No stock data found. Check the "Stock PPE" tab in the Google Sheet.</td></tr>'; return; }
   body.innerHTML = stockData.map((r,i)=>`<tr data-i="${i}">
 <td>${escapeHtml(String(r.item))}</td>
 <td><input type="number" min="0" step="1" class="stk" value="${r.stock===''?'':r.stock}"></td>
 <td><input type="number" min="0" step="1" class="rol" value="${r.reorder===''?'':r.reorder}"></td>
+<td>${r.pack>0 ? '1 '+escapeHtml(r.packLabel||'bdl')+' = '+r.pack+' pcs' : ''}</td>
 </tr>`).join('');
   body.querySelectorAll('input').forEach(inp=> inp.addEventListener('input', refreshStockRowStates));
   refreshStockRowStates();
