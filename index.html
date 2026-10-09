@@ -293,6 +293,13 @@ el('fItemSelect').addEventListener('change', toggleItemInput);
 el('fUnit').addEventListener('input', renderPackUI);
 el('utPack').addEventListener('click', ()=>{ packMode='pack'; el('fUnit').value=''; renderPackUI(); });
 el('utPcs').addEventListener('click', ()=>{ packMode='pcs'; el('fUnit').value=''; renderPackUI(); });
+let sigManual = false;
+el('fName').addEventListener('input', ()=>{
+  if(!sigManual) el('fSig').value = toInitials(el('fName').value);
+});
+el('fSig').addEventListener('input', e=>{
+  sigManual = e.target.value.trim() !== '';
+});
 el('fSig').addEventListener('input', e=>{
   const initials = toInitials(e.target.value);
   if(e.target.value !== initials) e.target.value = initials;
@@ -316,7 +323,7 @@ el('addBtn').addEventListener('click', async ()=>{
   const res = await apiAddEntry(entry);
   if(res.ok){
     setStatus('Added ✓'); loadStock();
-    el('fUnit').value=''; packItemKey=''; el('fName').value=''; el('fSig').value='';
+    el('fUnit').value=''; packItemKey=''; el('fName').value=''; el('fSig').value=''; sigManual=false;
     el('fItem').value='';
     el('fItemSelect').value = el('fItemSelect').options[0] ? el('fItemSelect').options[0].value : '__other__';
     toggleItemInput();
